@@ -22,11 +22,11 @@ service cloud.firestore {
         && request.resource.data.total == request.resource.data.qty * 100
         && request.resource.data.history.size() == 0;
 
-      // المستخدم يعدّل الاسم/المعلم/الملاحظات فقط، والأدمن يعدّل كل شيء
+      // المستخدم يعدّل الاسم/الهاتف/المعلم/الملاحظات فقط، والأدمن يعدّل كل شيء
       allow update: if isAdmin()
         || (resource.data.status != 'delivered'
             && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['name','teacher','note','history','updatedAt']));
+                 .hasOnly(['name','phone','teacher','note','history','updatedAt']));
 
       allow delete: if isAdmin();
     }

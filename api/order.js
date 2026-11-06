@@ -58,7 +58,7 @@ export default async function handler(req, res) {
       return res.status(201).json(order);
     }
 
-    // ===== تعديل طلب (الاسم / المعلم / الملاحظات فقط) =====
+    // ===== تعديل طلب (الاسم / الهاتف / المعلم / الملاحظات فقط) =====
     if (req.method === 'PUT') {
       const id = normId(body.id);
       const ref = doc(db, 'orders', id);
@@ -69,16 +69,18 @@ export default async function handler(req, res) {
 
       const name = clean(body.name, 60);
       if (name.length < 2) return res.status(400).json({ error: 'الاسم مطلوب' });
+      const phone = clean(body.phone, 20).replace(/[^\d+]/g, '');
+      if (phone.length < 10 || phone.length > 15) return res.status(400).json({ error: 'رقم هاتف التحويل غير صحيح' });
       const teacher = clean(body.teacher, 60);
       const note = clean(body.note, 500);
 
-      if (name === old.name && teacher === old.teacher && note === old.note)
+      if (name === old.name && phone === old.phone && teacher === old.teacher && note === old.note)
         return res.status(200).json(old);
 
       const now = Date.now();
-      const history = [...(old.history || []), { at: now, name: old.name, teacher: old.teacher, note: old.note }];
-      await updateDoc(ref, { name, teacher, note, history, updatedAt: now });
-      return res.status(200).json({ ...old, name, teacher, note, history, updatedAt: now });
+      const history = [...(old.history || []), { at: now, name: old.name, phone: old.phone, teacher: old.teacher, note: old.note }];
+      await updateDoc(ref, { name, phone, teacher, note, history, updatedAt: now });
+      return res.status(200).json({ ...old, name, phone, teacher, note, history, updatedAt: now });
     }
 
     return res.status(405).json({ error: 'Method not allowed' });

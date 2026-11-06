@@ -103,9 +103,9 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:30px}
   <section class="panel" id="pNew">
     <form id="newForm" onsubmit="return submitNew(event)">
       <div class="notice">
-        💳 برجاء تحويل المبلغ الإجمالي للطلب على الرقم:<br>
+        💳 التحويل عن طريق <b style="direction:rtl">فودافون كاش فقط</b><br>برجاء تحويل المبلغ الإجمالي للطلب على الرقم:<br>
         <b>01008637875</b><br>
-        ثم اكتب في الخانة أدناه رقم الهاتف الذي حوّلت منه.
+        ثم اكتب في الخانة أدناه رقم هاتف فودافون كاش الذي حوّلت منه.
       </div>
       <label>الاسم</label>
       <input id="fName" maxlength="60" required placeholder="اسمك بالكامل">
@@ -222,7 +222,7 @@ async function doSearch(id){
 function showOrder(o){
   const hist = (o.history||[]).slice().reverse().map(h=>`
     <div class="hist-item"><b>${fmt(h.at)}</b> — القيم السابقة:<br>
-      الاسم: ${esc(h.name)} | المعلم: ${esc(h.teacher)||'—'} | الملاحظة: ${esc(h.note)||'—'}</div>`).join('');
+      الاسم: ${esc(h.name)} | هاتف التحويل: ${esc(h.phone)||'—'} | المعلم: ${esc(h.teacher)||'—'} | الملاحظة: ${esc(h.note)||'—'}</div>`).join('');
   const editable = o.status !== 'delivered';
   $('result').innerHTML = `
   <div class="order">
@@ -243,6 +243,7 @@ function showOrder(o){
     <div class="edit-box">
       <h4>✏️ تعديل البيانات</h4>
       <label>الاسم</label><input id="eName" maxlength="60" value="${esc(o.name)}">
+      <label>رقم هاتف التحويل</label><input id="ePhone" type="tel" inputmode="tel" maxlength="15" dir="ltr" style="text-align:right" value="${esc(o.phone)}">
       <label>من طرف المعلم</label><input id="eTeacher" maxlength="60" value="${esc(o.teacher)}">
       <label>الملاحظة</label><textarea id="eNote" maxlength="500">${esc(o.note)}</textarea>
       <div class="err" id="editErr"></div>
@@ -254,7 +255,7 @@ function showOrder(o){
 async function saveEdit(id){
   $('editErr').textContent='';
   try{
-    const o = await api('PUT','/api/order',{ id, name:$('eName').value, teacher:$('eTeacher').value, note:$('eNote').value });
+    const o = await api('PUT','/api/order',{ id, name:$('eName').value, phone:$('ePhone').value, teacher:$('eTeacher').value, note:$('eNote').value });
     saveLocal(o); showOrder(o); toast('تم حفظ التعديل');
   }catch(err){ $('editErr').textContent = err.message; }
 }
