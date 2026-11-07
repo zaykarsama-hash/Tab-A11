@@ -63,7 +63,21 @@ textarea{resize:vertical;min-height:80px}
 .kv{display:grid;grid-template-columns:110px 1fr;gap:6px 10px;font-size:.95rem;padding:3px 0}
 .kv span:nth-child(odd){color:var(--muted)}
 .kv span{word-break:break-word}
-.admin-msg{margin-top:12px;background:var(--mint-soft);border-right:3px solid var(--mint);padding:10px 12px;border-radius:8px;font-size:.93rem}
+.admin-msg{margin:4px 0 16px;background:rgba(111,207,176,.13);border:2px solid var(--mint);border-radius:14px;padding:16px;font-size:1.12rem;line-height:1.9;font-weight:600;position:relative}
+.admin-msg .am-h{display:flex;align-items:center;gap:8px;font-weight:800;color:var(--mint);font-size:1.1rem;margin-bottom:6px}
+.admin-msg .am-t{white-space:pre-wrap;word-break:break-word}
+.admin-msg.fresh{animation:glow 1.6s ease-in-out 4}
+.admin-msg .newtag{background:#e5535f;color:#fff;border-radius:99px;font-size:.75rem;padding:2px 10px;font-weight:800}
+@keyframes glow{0%,100%{box-shadow:0 0 0 0 rgba(111,207,176,.0)}50%{box-shadow:0 0 0 8px rgba(111,207,176,.25)}}
+.choice{position:relative}
+.dot{display:none;position:absolute;top:-9px;left:-9px;min-width:26px;height:26px;padding:0 6px;border-radius:99px;background:#e5535f;color:#fff;
+  font-size:.82rem;font-weight:800;align-items:center;justify-content:center;border:2px solid var(--bg);animation:pulse 1.4s infinite}
+.dot.on{display:flex}
+.dot-s{width:12px;height:12px;border-radius:50%;background:#e5535f;display:inline-block;margin-inline-end:6px;animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
+.warn-big{background:rgba(212,176,104,.12);border:2px solid var(--amber);border-radius:14px;padding:16px;margin:14px 0;text-align:right}
+.warn-big h4{color:var(--amber);font-size:1.2rem;margin-bottom:6px}
+.warn-big p{color:var(--text)!important;font-size:1.02rem!important;font-weight:600;line-height:1.9}
 .hist{margin-top:14px;border-top:1px dashed var(--line);padding-top:10px}
 .hist h4{font-size:.9rem;color:var(--muted);margin-bottom:8px}
 .hist-item{font-size:.85rem;color:var(--muted);background:var(--bg);border-radius:8px;padding:8px 10px;margin-bottom:6px;line-height:1.7}
@@ -96,7 +110,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:30px}
 
   <div class="choices">
     <button class="choice" id="btnNew" onclick="openTab('new')">🛒 إنشاء طلب جديد<small>سعر القطعة 100 جـ</small></button>
-    <button class="choice" id="btnSearch" onclick="openTab('search')">🔍 البحث عن طلب<small>برقم الطلب</small></button>
+    <button class="choice" id="btnSearch" onclick="openTab('search')">🔍 البحث عن طلب<small>برقم الطلب</small><span class="dot" id="dot"></span></button>
   </div>
 
   <!-- إنشاء طلب -->
@@ -118,7 +132,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:30px}
         <button type="button" onclick="chQty(-1)">−</button>
       </div>
       <div class="total"><span>المبلغ الإجمالي</span><strong id="tot">100 جـ</strong></div>
-      <label>من طرف المعلم <em>(اختياري)</em></label>
+      <label>من طرف المعلم</label>
       <input id="fTeacher" maxlength="60" placeholder="اسم المعلم الوسيط">
       <label>ملاحظة على الطلب <em>(اختياري)</em></label>
       <textarea id="fNote" maxlength="500"></textarea>
@@ -130,6 +144,10 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:30px}
       <h3>تم تقديم طلبك بنجاح</h3>
       <div class="big" id="doneId"></div>
       <p>تم نسخ رقم الطلب إلى الحافظة. احتفظ به لمتابعة طلبك.</p>
+      <div class="warn-big">
+        <h4>⚠️ تنبيه هام</h4>
+        <p>تابع طلبك باستمرار! ادخل رقم الطلب في خانة <b>«البحث عن طلب»</b> من وقت لآخر للتأكد من قبول طلبك ومعرفة أي ملاحظات من الإدارة.</p>
+      </div>
       <p style="margin:8px 0"><span class="badge s-pending">في انتظار الموافقة</span></p>
       <button class="btn ghost" onclick="resetNew()">طلب جديد</button>
     </div>
@@ -166,6 +184,13 @@ const fmt = t => new Date(t).toLocaleString('ar-EG', { dateStyle:'medium', timeS
 /* ---------- التخزين المحلي ---------- */
 function loadLocal(){ try{ return JSON.parse(localStorage.getItem(LS)) || {}; }catch{ return {}; } }
 function saveLocal(o){ const all = loadLocal(); all[o.id] = o; try{ localStorage.setItem(LS, JSON.stringify(all)); }catch{} renderMine(); }
+
+/* ---------- الملاحظات غير المقروءة ---------- */
+const SEEN = 'trz_seen_v1';
+const loadSeen = () => { try{ return JSON.parse(localStorage.getItem(SEEN)) || {}; }catch{ return {}; } };
+const sig = o => (o.adminNoteAt||0) + '|' + (o.adminNote||'');
+const isUnread = o => !!o.adminNote && loadSeen()[o.id] !== sig(o);
+function markSeen(o){ const s = loadSeen(); s[o.id] = sig(o); try{ localStorage.setItem(SEEN, JSON.stringify(s)); }catch{} renderMine(); }
 
 /* ---------- الشبكة ---------- */
 async function api(method, url, body){
@@ -216,10 +241,12 @@ async function doSearch(id){
   try{
     const o = await api('GET','/api/order?id='+encodeURIComponent(id));
     saveLocal(o); showOrder(o);
+    $('result').scrollIntoView({behavior:'smooth',block:'start'});
   }catch(err){ $('searchErr').textContent = err.message; }
 }
 
 function showOrder(o){
+  const fresh = isUnread(o);
   const hist = (o.history||[]).slice().reverse().map(h=>`
     <div class="hist-item"><b>${fmt(h.at)}</b> — القيم السابقة:<br>
       الاسم: ${esc(h.name)} | هاتف التحويل: ${esc(h.phone)||'—'} | المعلم: ${esc(h.teacher)||'—'} | الملاحظة: ${esc(h.note)||'—'}</div>`).join('');
@@ -230,6 +257,7 @@ function showOrder(o){
       <span class="oid" onclick="copyText('${esc(o.id)}').then(()=>toast('تم النسخ'))" title="اضغط للنسخ">${esc(o.id)}</span>
       <span class="badge s-${esc(o.status)}">${STATUS[o.status]||esc(o.status)}</span>
     </div>
+    ${o.adminNote ? `<div class="admin-msg ${fresh?'fresh':''}"><div class="am-h">🔔 رسالة من الإدارة ${fresh?'<span class="newtag">جديدة</span>':''}</div><div class="am-t">${esc(o.adminNote)}</div></div>`:''}
     <div class="kv"><span>الاسم</span><span>${esc(o.name)}</span></div>
     <div class="kv"><span>هاتف التحويل</span><span dir="ltr" style="text-align:right">${esc(o.phone)}</span></div>
     <div class="kv"><span>الكمية</span><span>${o.qty}</span></div>
@@ -237,7 +265,6 @@ function showOrder(o){
     <div class="kv"><span>من طرف المعلم</span><span>${esc(o.teacher)||'—'}</span></div>
     <div class="kv"><span>الملاحظة</span><span>${esc(o.note)||'—'}</span></div>
     <div class="kv"><span>تاريخ الطلب</span><span>${fmt(o.createdAt)}</span></div>
-    ${o.adminNote ? `<div class="admin-msg">💬 <b>رسالة من الإدارة:</b><br>${esc(o.adminNote)}</div>`:''}
     ${hist ? `<div class="hist"><h4>سجل التعديلات</h4>${hist}</div>`:''}
     ${editable ? `
     <div class="edit-box">
@@ -250,6 +277,7 @@ function showOrder(o){
       <button class="btn" onclick="saveEdit('${esc(o.id)}')">حفظ التعديل</button>
     </div>` : ''}
   </div>`;
+  if(o.adminNote) markSeen(o);
 }
 
 async function saveEdit(id){
@@ -264,9 +292,11 @@ function renderMine(){
   const list = Object.values(loadLocal()).sort((a,b)=>b.createdAt-a.createdAt);
   $('mineList').innerHTML = list.length ? list.map(o=>`
     <div class="mine-item" onclick="openTab('search');doSearch('${esc(o.id)}');window.scrollTo({top:0,behavior:'smooth'})">
-      <div class="l"><span class="id">${esc(o.id)}</span><span class="sub">${esc(o.name)} • ${o.qty} قطعة • ${o.total} جـ</span></div>
+      <div class="l"><span class="id">${isUnread(o)?'<i class="dot-s"></i>':''}${esc(o.id)}</span><span class="sub">${esc(o.name)} • ${o.qty} قطعة • ${o.total} جـ</span></div>
       <span class="badge s-${esc(o.status)}">${STATUS[o.status]||esc(o.status)}</span>
     </div>`).join('') : '<div class="empty">لا توجد طلبات محفوظة على هذا الجهاز بعد</div>';
+  const n = list.filter(isUnread).length;
+  $('dot').textContent = n; $('dot').classList.toggle('on', n > 0);
 }
 
 /* تحديث حالات الطلبات المحفوظة من الخادم */
@@ -280,6 +310,8 @@ async function refreshAll(){
 }
 
 openTab('new'); calc(); renderMine(); refreshAll();
+setInterval(refreshAll, 60000);
+document.addEventListener('visibilitychange', () => { if(!document.hidden) refreshAll(); });
 </script>
 </body>
 </html>
