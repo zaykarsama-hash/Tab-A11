@@ -1,7 +1,6 @@
 import { db } from './_db.js';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
-const PRICE = 100;
 const CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const genId = () => {
   let s = '';
@@ -30,9 +29,17 @@ export default async function handler(req, res) {
       const name = clean(body.name, 60);
       const phone = clean(body.phone, 20).replace(/[^\d+]/g, '');
       const qty = parseInt(body.qty, 10);
+      const productId = clean(body.productId, 60);
       if (name.length < 2) return res.status(400).json({ error: 'الاسم مطلوب' });
       if (phone.length < 10 || phone.length > 15) return res.status(400).json({ error: 'رقم هاتف التحويل غير صحيح' });
       if (!Number.isInteger(qty) || qty < 1 || qty > 100) return res.status(400).json({ error: 'الكمية يجب أن تكون بين 1 و 100' });
+
+      if (!productId) return res.status(400).json({ error: 'اختر نوع المنتج' });
+      const pSnap = await getDoc(doc(db, 'products', productId));
+      if (!pSnap.exists() || pSnap.data().active === false)
+        return res.status(400).json({ error: 'هذا المنتج غير متاح حالياً' });
+      const product = pSnap.data();
+      const unitPrice = Number(product.price);
 
       let id = null;
       for (let i = 0; i < 6; i++) {
@@ -45,7 +52,8 @@ export default async function handler(req, res) {
       const now = Date.now();
       const order = {
         id, name, phone, qty,
-        total: qty * PRICE,
+        productId, productName: product.name, unitPrice,
+        total: qty * unitPrice,
         teacher: clean(body.teacher, 60),
         note: clean(body.note, 500),
         status: 'pending',
