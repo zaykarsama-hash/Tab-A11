@@ -91,6 +91,11 @@ textarea{resize:vertical;min-height:80px}
 .mine-item .l{display:flex;flex-direction:column;gap:2px}
 .mine-item .id{color:var(--mint);font-weight:800;direction:ltr;text-align:right}
 .mine-item .sub{color:var(--muted);font-size:.82rem}
+.prods{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.prod{border:1.5px solid var(--line);background:var(--card2);border-radius:12px;padding:12px 8px;cursor:pointer;text-align:center;transition:.2s}
+.prod:hover{border-color:var(--mint)}
+.prod.sel{border-color:var(--mint);background:var(--mint-soft)}
+.prod b{display:block;margin-bottom:2px}.prod span{color:var(--mint);font-weight:800;font-size:.95rem}
 .empty{color:var(--muted);text-align:center;padding:18px}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--mint);color:#000;font-weight:800;
   padding:12px 22px;border-radius:99px;transition:.3s;z-index:9;max-width:90%;text-align:center}
@@ -109,7 +114,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:30px}
   </header>
 
   <div class="choices">
-    <button class="choice" id="btnNew" onclick="openTab('new')">🛒 إنشاء طلب جديد<small>سعر القطعة 100 جـ</small></button>
+    <button class="choice" id="btnNew" onclick="openTab('new')">🛒 إنشاء طلب جديد<small>اختر المنتج والكمية</small></button>
     <button class="choice" id="btnSearch" onclick="openTab('search')">🔍 البحث عن طلب<small>برقم الطلب</small><span class="dot" id="dot"></span></button>
   </div>
 
@@ -125,13 +130,15 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:30px}
       <input id="fName" maxlength="60" required placeholder="اسمك بالكامل">
       <label>رقم هاتف التحويل</label>
       <input id="fPhone" type="tel" inputmode="tel" maxlength="15" required placeholder="01xxxxxxxxx" dir="ltr" style="text-align:right">
+      <label>نوع المنتج</label>
+      <div id="prodList" class="prods"><div class="empty" style="grid-column:1/-1;padding:8px">جاري تحميل المنتجات...</div></div>
       <label>الكمية</label>
       <div class="qty-row">
         <button type="button" onclick="chQty(1)">+</button>
         <input id="fQty" type="number" min="1" max="100" value="1" required oninput="calc()">
         <button type="button" onclick="chQty(-1)">−</button>
       </div>
-      <div class="total"><span>المبلغ الإجمالي</span><strong id="tot">100 جـ</strong></div>
+      <div class="total"><span>المبلغ الإجمالي</span><strong id="tot">—</strong></div>
       <label>من طرف المعلم</label>
       <input id="fTeacher" maxlength="60" placeholder="اسم المعلم الوسيط">
       <label>ملاحظة على الطلب <em>(اختياري)</em></label>
@@ -174,7 +181,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:30px}
 <div class="toast" id="toast"></div>
 
 <script>
-const PRICE = 100;
+let products = [], curProd = null;
 const LS = 'trz_orders_v1';
 const STATUS = { pending:'في انتظار الموافقة', approved:'تمت الموافقة، في انتظار التسليم', rejected:'مرفوض', delivered:'تم التسليم' };
 const $ = id => document.getElementById(id);
@@ -208,7 +215,19 @@ function openTab(n){
   if(n==='search') $('sId').focus();
 }
 function chQty(d){ const i=$('fQty'); i.value = Math.min(100, Math.max(1, (parseInt(i.value)||1)+d)); calc(); }
-function calc(){ const q=Math.min(100,Math.max(1,parseInt($('fQty').value)||1)); $('tot').textContent = (q*PRICE).toLocaleString('en')+' جـ'; }
+function calc(){ const q=Math.min(100,Math.max(1,parseInt($('fQty').value)||1)); $('tot').textContent = curProd ? (q*curProd.price).toLocaleString('en')+' جـ' : '—'; }
+function renderProds(){
+  const box = $('prodList');
+  if(!products.length){ box.innerHTML = '<div class="empty" style="grid-column:1/-1;padding:8px">لا توجد منتجات متاحة حالياً</div>'; return; }
+  box.innerHTML = products.map(p=>`<div class="prod ${curProd&&curProd.id===p.id?'sel':''}" onclick="pickProd('${esc(p.id)}')"><b>${esc(p.name)}</b><span>${p.price} جـ</span></div>`).join('');
+}
+function pickProd(id){ curProd = products.find(p=>p.id===id) || null; renderProds(); calc(); }
+async function loadProducts(){
+  try{ products = await api('GET','/api/products'); }catch{ products = []; }
+  if(products.length === 1) curProd = products[0];
+  else if(curProd) curProd = products.find(p=>p.id===curProd.id) || null;
+  renderProds(); calc();
+}
 async function copyText(t){
   try{ await navigator.clipboard.writeText(t); return true; }
   catch{ const a=document.createElement('textarea'); a.value=t; document.body.appendChild(a); a.select(); let ok=false; try{ok=document.execCommand('copy')}catch{} a.remove(); return ok; }
@@ -217,8 +236,9 @@ async function copyText(t){
 async function submitNew(e){
   e.preventDefault(); $('newErr').textContent=''; const b=$('newBtn'); b.disabled=true; b.textContent='جاري الإرسال...';
   try{
+    if(!curProd) throw new Error('اختر نوع المنتج');
     const o = await api('POST','/api/order',{
-      name:$('fName').value, phone:$('fPhone').value, qty:$('fQty').value, teacher:$('fTeacher').value, note:$('fNote').value
+      productId:curProd.id, name:$('fName').value, phone:$('fPhone').value, qty:$('fQty').value, teacher:$('fTeacher').value, note:$('fNote').value
     });
     saveLocal(o);
     await copyText(o.id);
@@ -248,8 +268,8 @@ async function doSearch(id){
 function showOrder(o){
   const fresh = isUnread(o);
   const hist = (o.history||[]).slice().reverse().map(h=>`
-    <div class="hist-item"><b>${fmt(h.at)}</b> — القيم السابقة:<br>
-      الاسم: ${esc(h.name)} | هاتف التحويل: ${esc(h.phone)||'—'} | المعلم: ${esc(h.teacher)||'—'} | الملاحظة: ${esc(h.note)||'—'}</div>`).join('');
+    <div class="hist-item"><b>${fmt(h.at)}</b> — ${h.by==='admin'?'(تعديل من الإدارة) ':''}القيم السابقة:<br>
+      الاسم: ${esc(h.name)} | هاتف التحويل: ${esc(h.phone)||'—'} | المعلم: ${esc(h.teacher)||'—'} | الملاحظة: ${esc(h.note)||'—'}${h.by==='admin'?' | المنتج: '+(esc(h.productName)||'—')+' | الكمية: '+h.qty+' | الإجمالي: '+h.total+' جـ':''}</div>`).join('');
   const editable = o.status !== 'delivered';
   $('result').innerHTML = `
   <div class="order">
@@ -260,6 +280,7 @@ function showOrder(o){
     ${o.adminNote ? `<div class="admin-msg ${fresh?'fresh':''}"><div class="am-h">🔔 رسالة من الإدارة ${fresh?'<span class="newtag">جديدة</span>':''}</div><div class="am-t">${esc(o.adminNote)}</div></div>`:''}
     <div class="kv"><span>الاسم</span><span>${esc(o.name)}</span></div>
     <div class="kv"><span>هاتف التحويل</span><span dir="ltr" style="text-align:right">${esc(o.phone)}</span></div>
+    <div class="kv"><span>المنتج</span><span>${esc(o.productName)||'—'}</span></div>
     <div class="kv"><span>الكمية</span><span>${o.qty}</span></div>
     <div class="kv"><span>الإجمالي</span><span><b style="color:var(--mint)">${o.total} جـ</b></span></div>
     <div class="kv"><span>من طرف المعلم</span><span>${esc(o.teacher)||'—'}</span></div>
@@ -292,7 +313,7 @@ function renderMine(){
   const list = Object.values(loadLocal()).sort((a,b)=>b.createdAt-a.createdAt);
   $('mineList').innerHTML = list.length ? list.map(o=>`
     <div class="mine-item" onclick="openTab('search');doSearch('${esc(o.id)}');window.scrollTo({top:0,behavior:'smooth'})">
-      <div class="l"><span class="id">${isUnread(o)?'<i class="dot-s"></i>':''}${esc(o.id)}</span><span class="sub">${esc(o.name)} • ${o.qty} قطعة • ${o.total} جـ</span></div>
+      <div class="l"><span class="id">${isUnread(o)?'<i class="dot-s"></i>':''}${esc(o.id)}</span><span class="sub">${o.productName?esc(o.productName)+' • ':''}${esc(o.name)} • ${o.qty} قطعة • ${o.total} جـ</span></div>
       <span class="badge s-${esc(o.status)}">${STATUS[o.status]||esc(o.status)}</span>
     </div>`).join('') : '<div class="empty">لا توجد طلبات محفوظة على هذا الجهاز بعد</div>';
   const n = list.filter(isUnread).length;
@@ -309,7 +330,7 @@ async function refreshAll(){
   renderMine();
 }
 
-openTab('new'); calc(); renderMine(); refreshAll();
+openTab('new'); calc(); renderMine(); refreshAll(); loadProducts();
 setInterval(refreshAll, 60000);
 document.addEventListener('visibilitychange', () => { if(!document.hidden) refreshAll(); });
 </script>
