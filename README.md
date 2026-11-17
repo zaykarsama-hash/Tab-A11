@@ -9,7 +9,7 @@
 ## 1) إعداد Firebase (مرة واحدة)
 1. من Firebase Console ← مشروع `tab-a11` ← **Firestore Database** ← Create database.
 2. **Authentication** ← Sign-in method ← فعّل **Email/Password** ← Users ← Add user (إيميل وباسورد الأدمن).
-3. افتح `firestore.rules` وغيّر `ADMIN_EMAIL@example.com` إلى إيميل الأدمن، ثم انسخ المحتوى في Firestore ← Rules ← Publish.
+3. افتح `firestore.rules` وغيّر `ADMIN_EMAIL@example.com` إلى إيميل الأدمن، ثم انسخ المحتوى في Firestore ← Rules ← Publish (القواعد تشمل مجموعتي orders و products).
 4. **Firestore ← Indexes**: لا حاجة لفهارس إضافية.
 
 ## 2) الرفع على GitHub
@@ -33,3 +33,6 @@ python -m http.server 5500
 ```
 ثم افتح http://localhost:5500/admin.html وسجّل الدخول.
 (يُفضّل التشغيل عبر localhost بدل فتح الملف مباشرة لأن Firebase Auth لا يعمل جيداً من file://)
+
+## المنتجات
+من لوحة الأدمن افتح قسم **المنتجات والأسعار** وأضف أول منتج قبل أن يستطيع المستخدمون تقديم طلبات.

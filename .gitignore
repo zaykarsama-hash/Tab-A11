@@ -1,0 +1,5 @@
+node_modules
+.vercel
+.env
+# ملف الأدمن لا يُرفع على GitHub
+admin-local/

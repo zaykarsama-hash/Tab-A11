@@ -2,10 +2,16 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ⚠️ غيّر الإيميل التالي إلى إيميل حساب الأدمن الذي ستنشئه في Firebase Authentication
+    // ⚠️ غيّر الإيميل التالي إلى إيميل حساب الأدمن الذي أنشأته في Firebase Authentication
     function isAdmin() {
       return request.auth != null
         && request.auth.token.email == 'ADMIN_EMAIL@example.com';
+    }
+
+    // المنتجات: قراءة للجميع، وتعديل للأدمن فقط
+    match /products/{pid} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     match /orders/{id} {
@@ -13,14 +19,21 @@ service cloud.firestore {
       allow get: if true;
       allow list: if isAdmin();
 
-      // إنشاء طلب جديد بحالة "في انتظار الموافقة" فقط
-      allow create: if request.resource.data.keys().hasOnly(
-          ['id','name','phone','qty','total','teacher','note','status','adminNote','history','createdAt','updatedAt'])
+      // الأدمن ينشئ أي طلب، والمستخدم ينشئ طلباً بحالة "في انتظار الموافقة" وسعر المنتج الحقيقي فقط
+      allow create: if isAdmin() || (
+        request.resource.data.keys().hasOnly(
+          ['id','name','phone','qty','total','unitPrice','productId','productName','teacher','note','status','adminNote','history','createdAt','updatedAt'])
         && request.resource.data.status == 'pending'
         && request.resource.data.qty is int
         && request.resource.data.qty >= 1 && request.resource.data.qty <= 100
-        && request.resource.data.total == request.resource.data.qty * 100
-        && request.resource.data.history.size() == 0;
+        && request.resource.data.productId is string
+        && exists(/databases/$(database)/documents/products/$(request.resource.data.productId))
+        && get(/databases/$(database)/documents/products/$(request.resource.data.productId)).data.active == true
+        && request.resource.data.unitPrice == get(/databases/$(database)/documents/products/$(request.resource.data.productId)).data.price
+        && request.resource.data.productName == get(/databases/$(database)/documents/products/$(request.resource.data.productId)).data.name
+        && request.resource.data.total == request.resource.data.qty * request.resource.data.unitPrice
+        && request.resource.data.history.size() == 0
+      );
 
       // المستخدم يعدّل الاسم/الهاتف/المعلم/الملاحظات فقط، والأدمن يعدّل كل شيء
       allow update: if isAdmin()
