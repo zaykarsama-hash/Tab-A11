@@ -40,6 +40,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'هذا المنتج غير متاح حالياً' });
       const product = pSnap.data();
       const unitPrice = Number(product.price);
+      const total = qty * unitPrice;
 
       let id = null;
       for (let i = 0; i < 6; i++) {
@@ -53,11 +54,12 @@ export default async function handler(req, res) {
       const order = {
         id, name, phone, qty,
         productId, productName: product.name, unitPrice,
-        total: qty * unitPrice,
+        total,
         teacher: clean(body.teacher, 60),
         note: clean(body.note, 500),
         status: 'pending',
         adminNote: '',
+        adminNotes: [{ id: 'auto', text: `في انتظار إتمام الدفع بقيمة ${total} جنيه مصري للموافقة على طلبك`, at: now, auto: true }],
         history: [],
         createdAt: now,
         updatedAt: now
