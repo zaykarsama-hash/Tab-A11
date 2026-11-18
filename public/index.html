@@ -66,6 +66,9 @@ textarea{resize:vertical;min-height:80px}
 .admin-msg{margin:4px 0 16px;background:rgba(111,207,176,.13);border:2px solid var(--mint);border-radius:14px;padding:16px;font-size:1.12rem;line-height:1.9;font-weight:600;position:relative}
 .admin-msg .am-h{display:flex;align-items:center;gap:8px;font-weight:800;color:var(--mint);font-size:1.1rem;margin-bottom:6px}
 .admin-msg .am-t{white-space:pre-wrap;word-break:break-word}
+.admin-msg .am-i{padding:8px 0;border-top:1px dashed rgba(111,207,176,.35)}
+.admin-msg .am-h + .am-i{border-top:none}
+.pay-note{background:var(--mint-soft);border:1.5px solid var(--mint);border-radius:12px;padding:12px;margin:10px 0;font-weight:700;line-height:1.8}
 .admin-msg.fresh{animation:glow 1.6s ease-in-out 4}
 .admin-msg .newtag{background:#e5535f;color:#fff;border-radius:99px;font-size:.75rem;padding:2px 10px;font-weight:800}
 @keyframes glow{0%,100%{box-shadow:0 0 0 0 rgba(111,207,176,.0)}50%{box-shadow:0 0 0 8px rgba(111,207,176,.25)}}
@@ -156,6 +159,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:30px}
         <p>تابع طلبك باستمرار! ادخل رقم الطلب في خانة <b>«البحث عن طلب»</b> من وقت لآخر للتأكد من قبول طلبك ومعرفة أي ملاحظات من الإدارة.</p>
       </div>
       <p style="margin:8px 0"><span class="badge s-pending">في انتظار الموافقة</span></p>
+      <div class="pay-note" id="doneAmt"></div>
       <button class="btn ghost" onclick="resetNew()">طلب جديد</button>
     </div>
   </section>
@@ -195,8 +199,9 @@ function saveLocal(o){ const all = loadLocal(); all[o.id] = o; try{ localStorage
 /* ---------- الملاحظات غير المقروءة ---------- */
 const SEEN = 'trz_seen_v1';
 const loadSeen = () => { try{ return JSON.parse(localStorage.getItem(SEEN)) || {}; }catch{ return {}; } };
-const sig = o => (o.adminNoteAt||0) + '|' + (o.adminNote||'');
-const isUnread = o => !!o.adminNote && loadSeen()[o.id] !== sig(o);
+const getNotes = o => Array.isArray(o.adminNotes) ? o.adminNotes : (o.adminNote ? [{id:'legacy',text:o.adminNote,at:o.adminNoteAt||0}] : []);
+const sig = o => (o.adminNoteAt||0) + '|' + getNotes(o).length;
+const isUnread = o => getNotes(o).length > 0 && loadSeen()[o.id] !== sig(o);
 function markSeen(o){ const s = loadSeen(); s[o.id] = sig(o); try{ localStorage.setItem(SEEN, JSON.stringify(s)); }catch{} renderMine(); }
 
 /* ---------- الشبكة ---------- */
@@ -241,6 +246,7 @@ async function submitNew(e){
       productId:curProd.id, name:$('fName').value, phone:$('fPhone').value, qty:$('fQty').value, teacher:$('fTeacher').value, note:$('fNote').value
     });
     saveLocal(o);
+    $('doneAmt').textContent = (getNotes(o)[0] || {}).text || '';
     await copyText(o.id);
     $('newForm').style.display='none'; $('doneBox').style.display='block'; $('doneId').textContent=o.id;
     toast('تم نسخ رقم الطلب');
@@ -267,6 +273,7 @@ async function doSearch(id){
 
 function showOrder(o){
   const fresh = isUnread(o);
+  const notes = getNotes(o);
   const hist = (o.history||[]).slice().reverse().map(h=>`
     <div class="hist-item"><b>${fmt(h.at)}</b> — ${h.by==='admin'?'(تعديل من الإدارة) ':''}القيم السابقة:<br>
       الاسم: ${esc(h.name)} | هاتف التحويل: ${esc(h.phone)||'—'} | المعلم: ${esc(h.teacher)||'—'} | الملاحظة: ${esc(h.note)||'—'}${h.by==='admin'?' | المنتج: '+(esc(h.productName)||'—')+' | الكمية: '+h.qty+' | الإجمالي: '+h.total+' جـ':''}</div>`).join('');
@@ -277,7 +284,7 @@ function showOrder(o){
       <span class="oid" onclick="copyText('${esc(o.id)}').then(()=>toast('تم النسخ'))" title="اضغط للنسخ">${esc(o.id)}</span>
       <span class="badge s-${esc(o.status)}">${STATUS[o.status]||esc(o.status)}</span>
     </div>
-    ${o.adminNote ? `<div class="admin-msg ${fresh?'fresh':''}"><div class="am-h">🔔 رسالة من الإدارة ${fresh?'<span class="newtag">جديدة</span>':''}</div><div class="am-t">${esc(o.adminNote)}</div></div>`:''}
+    ${notes.length ? `<div class="admin-msg ${fresh?'fresh':''}"><div class="am-h">🔔 ${notes.length>1?'ملاحظات':'ملاحظة'} من الإدارة ${fresh?'<span class="newtag">جديدة</span>':''}</div>${notes.map(n=>`<div class="am-t am-i">${esc(n.text)}</div>`).join('')}</div>`:''}
     <div class="kv"><span>الاسم</span><span>${esc(o.name)}</span></div>
     <div class="kv"><span>هاتف التحويل</span><span dir="ltr" style="text-align:right">${esc(o.phone)}</span></div>
     <div class="kv"><span>المنتج</span><span>${esc(o.productName)||'—'}</span></div>
@@ -298,7 +305,7 @@ function showOrder(o){
       <button class="btn" onclick="saveEdit('${esc(o.id)}')">حفظ التعديل</button>
     </div>` : ''}
   </div>`;
-  if(o.adminNote) markSeen(o);
+  if(notes.length) markSeen(o);
 }
 
 async function saveEdit(id){
