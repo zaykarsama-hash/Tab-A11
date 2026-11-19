@@ -15,6 +15,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // تكلفة المنتجات: للأدمن فقط (لا يراها المستخدمون)
+    match /costs/{pid} {
+      allow read, write: if isAdmin();
+    }
+
     match /orders/{id} {
       // أي شخص يعرف رقم الطلب يستطيع قراءته فقط (لا يمكنه سرد كل الطلبات)
       allow get: if true;
@@ -23,7 +28,7 @@ service cloud.firestore {
       // الأدمن ينشئ أي طلب، والمستخدم ينشئ طلباً بحالة "في انتظار الموافقة" وسعر المنتج الحقيقي فقط
       allow create: if isAdmin() || (
         request.resource.data.keys().hasOnly(
-          ['id','name','phone','qty','total','unitPrice','productId','productName','teacher','note','status','adminNote','history','createdAt','updatedAt'])
+          ['id','name','phone','qty','total','unitPrice','productId','productName','teacher','note','status','adminNote','adminNotes','history','createdAt','updatedAt'])
         && request.resource.data.status == 'pending'
         && request.resource.data.qty is int
         && request.resource.data.qty >= 1 && request.resource.data.qty <= 100
@@ -34,6 +39,10 @@ service cloud.firestore {
         && request.resource.data.productName == get(/databases/$(database)/documents/products/$(request.resource.data.productId)).data.name
         && request.resource.data.total == request.resource.data.qty * request.resource.data.unitPrice
         && request.resource.data.history.size() == 0
+        && request.resource.data.adminNote == ''
+        && request.resource.data.adminNotes.size() == 1
+        && request.resource.data.adminNotes[0].auto == true
+        && request.resource.data.adminNotes[0].text.size() < 200
       );
 
       // المستخدم يعدّل الاسم/الهاتف/المعلم/الملاحظات فقط، والأدمن يعدّل كل شيء
