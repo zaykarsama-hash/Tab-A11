@@ -9,7 +9,7 @@
 ## 1) إعداد Firebase (مرة واحدة)
 1. من Firebase Console ← مشروع `tab-a11` ← **Firestore Database** ← Create database.
 2. **Authentication** ← Sign-in method ← فعّل **Email/Password** ← Users ← Add user (إيميل وباسورد الأدمن).
-3. افتح `firestore.rules` وغيّر `ADMIN_EMAIL@example.com` إلى إيميل الأدمن، ثم انسخ المحتوى في Firestore ← Rules ← Publish (القواعد تشمل مجموعتي orders و products).
+3. انسخ محتوى `firestore.rules` في Firestore ← Rules ← Publish (حساب الأدمن فيه: zxcmax10@gmail.com، وأنشئ هذا الحساب في Authentication بنفس الإيميل).
 4. **Firestore ← Indexes**: لا حاجة لفهارس إضافية.
 
 ## 2) الرفع على GitHub

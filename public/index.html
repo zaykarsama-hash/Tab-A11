@@ -94,11 +94,13 @@ textarea{resize:vertical;min-height:80px}
 .mine-item .l{display:flex;flex-direction:column;gap:2px}
 .mine-item .id{color:var(--mint);font-weight:800;direction:ltr;text-align:right}
 .mine-item .sub{color:var(--muted);font-size:.82rem}
-.prods{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
-.prod{border:1.5px solid var(--line);background:var(--card2);border-radius:12px;padding:12px 8px;cursor:pointer;text-align:center;transition:.2s}
-.prod:hover{border-color:var(--mint)}
+.prods{display:flex;flex-direction:column;gap:8px}
+.prod{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1.5px solid var(--line);background:var(--card2);border-radius:12px;padding:10px 12px;transition:.2s}
 .prod.sel{border-color:var(--mint);background:var(--mint-soft)}
-.prod b{display:block;margin-bottom:2px}.prod span{color:var(--mint);font-weight:800;font-size:.95rem}
+.prod .pi b{display:block}.prod .pi span{color:var(--mint);font-weight:800;font-size:.92rem}
+.stp{display:flex;align-items:center;gap:8px}
+.stp button{width:38px;height:38px;border-radius:10px;border:1.5px solid var(--line);background:var(--card);color:var(--mint);font-size:1.2rem;cursor:pointer;font-family:inherit}
+.stp .q{min-width:26px;text-align:center;font-weight:800;font-size:1.05rem}
 .empty{color:var(--muted);text-align:center;padding:18px}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--mint);color:#000;font-weight:800;
   padding:12px 22px;border-radius:99px;transition:.3s;z-index:9;max-width:90%;text-align:center}
@@ -133,14 +135,8 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:30px}
       <input id="fName" maxlength="60" required placeholder="اسمك بالكامل">
       <label>رقم هاتف التحويل</label>
       <input id="fPhone" type="tel" inputmode="tel" maxlength="15" required placeholder="01xxxxxxxxx" dir="ltr" style="text-align:right">
-      <label>نوع المنتج</label>
+      <label>المنتجات <em>(اختر منتجاً أو أكثر وحدد الكمية)</em></label>
       <div id="prodList" class="prods"><div class="empty" style="grid-column:1/-1;padding:8px">جاري تحميل المنتجات...</div></div>
-      <label>الكمية</label>
-      <div class="qty-row">
-        <button type="button" onclick="chQty(1)">+</button>
-        <input id="fQty" type="number" min="1" max="100" value="1" required oninput="calc()">
-        <button type="button" onclick="chQty(-1)">−</button>
-      </div>
       <div class="total"><span>المبلغ الإجمالي</span><strong id="tot">—</strong></div>
       <label>من طرف المعلم</label>
       <input id="fTeacher" maxlength="60" placeholder="اسم المعلم الوسيط">
@@ -185,7 +181,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:30px}
 <div class="toast" id="toast"></div>
 
 <script>
-let products = [], curProd = null;
+let products = [], cart = {};
 const LS = 'trz_orders_v1';
 const STATUS = { pending:'في انتظار الموافقة', approved:'تمت الموافقة، في انتظار التسليم', rejected:'مرفوض', delivered:'تم التسليم' };
 const $ = id => document.getElementById(id);
@@ -200,6 +196,8 @@ function saveLocal(o){ const all = loadLocal(); all[o.id] = o; try{ localStorage
 const SEEN = 'trz_seen_v1';
 const loadSeen = () => { try{ return JSON.parse(localStorage.getItem(SEEN)) || {}; }catch{ return {}; } };
 const getNotes = o => Array.isArray(o.adminNotes) ? o.adminNotes : (o.adminNote ? [{id:'legacy',text:o.adminNote,at:o.adminNoteAt||0}] : []);
+const getItems = o => (Array.isArray(o.items) && o.items.length) ? o.items : [{ productId:o.productId||'', productName:o.productName||'', unitPrice:o.unitPrice, qty:o.qty||0 }];
+const itemsText = o => getItems(o).map(i => (i.productName||'—') + ' × ' + i.qty).join('، ');
 const sig = o => (o.adminNoteAt||0) + '|' + getNotes(o).length;
 const isUnread = o => getNotes(o).length > 0 && loadSeen()[o.id] !== sig(o);
 function markSeen(o){ const s = loadSeen(); s[o.id] = sig(o); try{ localStorage.setItem(SEEN, JSON.stringify(s)); }catch{} renderMine(); }
@@ -219,19 +217,31 @@ function openTab(n){
   $('btnNew').classList.toggle('active', n==='new'); $('btnSearch').classList.toggle('active', n==='search');
   if(n==='search') $('sId').focus();
 }
-function chQty(d){ const i=$('fQty'); i.value = Math.min(100, Math.max(1, (parseInt(i.value)||1)+d)); calc(); }
-function calc(){ const q=Math.min(100,Math.max(1,parseInt($('fQty').value)||1)); $('tot').textContent = curProd ? (q*curProd.price).toLocaleString('en')+' جـ' : '—'; }
+function cartItems(){ return products.filter(p=>cart[p.id]).map(p=>({productId:p.id, qty:cart[p.id]})); }
+function calc(){
+  const t = products.reduce((s,p)=>s+(cart[p.id]||0)*p.price,0);
+  $('tot').textContent = Object.keys(cart).length ? t.toLocaleString('en')+' جـ' : '—';
+}
+function chQtyOf(id,d){
+  const cur = cart[id]||0, n = Math.min(100, Math.max(0, cur+d));
+  if(cur===0 && d>0 && Object.keys(cart).length>=5){ toast('الحد الأقصى 5 منتجات مختلفة في الطلب'); return; }
+  if(n===0) delete cart[id]; else cart[id]=n;
+  renderProds();
+}
 function renderProds(){
   const box = $('prodList');
-  if(!products.length){ box.innerHTML = '<div class="empty" style="grid-column:1/-1;padding:8px">لا توجد منتجات متاحة حالياً</div>'; return; }
-  box.innerHTML = products.map(p=>`<div class="prod ${curProd&&curProd.id===p.id?'sel':''}" onclick="pickProd('${esc(p.id)}')"><b>${esc(p.name)}</b><span>${p.price} جـ</span></div>`).join('');
+  if(!products.length){ box.innerHTML = '<div class="empty" style="padding:8px">لا توجد منتجات متاحة حالياً</div>'; calc(); return; }
+  box.innerHTML = products.map(p=>{
+    const q = cart[p.id]||0, id = esc(p.id);
+    return `<div class="prod ${q?'sel':''}"><div class="pi"><b>${esc(p.name)}</b><span>${p.price} جـ</span></div>
+      <div class="stp"><button type="button" onclick="chQtyOf('${id}',1)">+</button><span class="q">${q}</span><button type="button" onclick="chQtyOf('${id}',-1)">−</button></div></div>`;
+  }).join('');
+  calc();
 }
-function pickProd(id){ curProd = products.find(p=>p.id===id) || null; renderProds(); calc(); }
 async function loadProducts(){
   try{ products = await api('GET','/api/products'); }catch{ products = []; }
-  if(products.length === 1) curProd = products[0];
-  else if(curProd) curProd = products.find(p=>p.id===curProd.id) || null;
-  renderProds(); calc();
+  for(const k of Object.keys(cart)) if(!products.some(p=>p.id===k)) delete cart[k];
+  renderProds();
 }
 async function copyText(t){
   try{ await navigator.clipboard.writeText(t); return true; }
@@ -241,9 +251,9 @@ async function copyText(t){
 async function submitNew(e){
   e.preventDefault(); $('newErr').textContent=''; const b=$('newBtn'); b.disabled=true; b.textContent='جاري الإرسال...';
   try{
-    if(!curProd) throw new Error('اختر نوع المنتج');
+    const items = cartItems(); if(!items.length) throw new Error('اختر منتجاً واحداً على الأقل');
     const o = await api('POST','/api/order',{
-      productId:curProd.id, name:$('fName').value, phone:$('fPhone').value, qty:$('fQty').value, teacher:$('fTeacher').value, note:$('fNote').value
+      items, name:$('fName').value, phone:$('fPhone').value, teacher:$('fTeacher').value, note:$('fNote').value
     });
     saveLocal(o);
     $('doneAmt').textContent = (getNotes(o)[0] || {}).text || '';
@@ -255,7 +265,7 @@ async function submitNew(e){
   return false;
 }
 function resetNew(){
-  $('newForm').reset(); $('fQty').value=1; calc();
+  $('newForm').reset(); cart={}; renderProds();
   $('newForm').style.display='block'; $('doneBox').style.display='none';
 }
 
@@ -287,8 +297,7 @@ function showOrder(o){
     ${notes.length ? `<div class="admin-msg ${fresh?'fresh':''}"><div class="am-h">🔔 ${notes.length>1?'ملاحظات':'ملاحظة'} من الإدارة ${fresh?'<span class="newtag">جديدة</span>':''}</div>${notes.map(n=>`<div class="am-t am-i">${esc(n.text)}</div>`).join('')}</div>`:''}
     <div class="kv"><span>الاسم</span><span>${esc(o.name)}</span></div>
     <div class="kv"><span>هاتف التحويل</span><span dir="ltr" style="text-align:right">${esc(o.phone)}</span></div>
-    <div class="kv"><span>المنتج</span><span>${esc(o.productName)||'—'}</span></div>
-    <div class="kv"><span>الكمية</span><span>${o.qty}</span></div>
+    <div class="kv"><span>المنتجات</span><span>${getItems(o).map(i=>esc(i.productName||'—')+' × '+i.qty).join('<br>')}</span></div>
     <div class="kv"><span>الإجمالي</span><span><b style="color:var(--mint)">${o.total} جـ</b></span></div>
     <div class="kv"><span>من طرف المعلم</span><span>${esc(o.teacher)||'—'}</span></div>
     <div class="kv"><span>الملاحظة</span><span>${esc(o.note)||'—'}</span></div>
@@ -320,7 +329,7 @@ function renderMine(){
   const list = Object.values(loadLocal()).sort((a,b)=>b.createdAt-a.createdAt);
   $('mineList').innerHTML = list.length ? list.map(o=>`
     <div class="mine-item" onclick="openTab('search');doSearch('${esc(o.id)}');window.scrollTo({top:0,behavior:'smooth'})">
-      <div class="l"><span class="id">${isUnread(o)?'<i class="dot-s"></i>':''}${esc(o.id)}</span><span class="sub">${o.productName?esc(o.productName)+' • ':''}${esc(o.name)} • ${o.qty} قطعة • ${o.total} جـ</span></div>
+      <div class="l"><span class="id">${isUnread(o)?'<i class="dot-s"></i>':''}${esc(o.id)}</span><span class="sub">${esc(itemsText(o))} • ${esc(o.name)} • ${o.total} جـ</span></div>
       <span class="badge s-${esc(o.status)}">${STATUS[o.status]||esc(o.status)}</span>
     </div>`).join('') : '<div class="empty">لا توجد طلبات محفوظة على هذا الجهاز بعد</div>';
   const n = list.filter(isUnread).length;

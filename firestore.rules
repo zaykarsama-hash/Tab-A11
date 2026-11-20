@@ -2,11 +2,40 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ⚠️ غيّر الإيميل التالي إلى إيميل حساب الأدمن الذي أنشأته في Firebase Authentication
-    // اكتبه بحروف صغيرة (lowercase) مهما كانت طريقة كتابته عند التسجيل
+    // حساب الأدمن (بحروف صغيرة)
     function isAdmin() {
       return request.auth != null
-        && request.auth.token.email.lower() == 'admin_email@example.com';
+        && request.auth.token.email.lower() == 'zxcmax10@gmail.com';
+    }
+
+    // ===== التحقق من منتجات الطلب (حتى 5 منتجات مختلفة) =====
+    function itemOk(it) {
+      let p = get(/databases/$(database)/documents/products/$(it.productId)).data;
+      return it.keys().hasOnly(['productId', 'productName', 'unitPrice', 'qty'])
+        && it.qty is int && it.qty >= 1 && it.qty <= 100
+        && p.active == true
+        && it.unitPrice == p.price
+        && it.productName == p.name;
+    }
+    function sub(it) { return it.unitPrice * it.qty; }
+    function validItems(d) {
+      let it = d.items;
+      return it is list && it.size() >= 1 && it.size() <= 5
+        && itemOk(it[0])
+        && (it.size() < 2 || itemOk(it[1]))
+        && (it.size() < 3 || itemOk(it[2]))
+        && (it.size() < 4 || itemOk(it[3]))
+        && (it.size() < 5 || itemOk(it[4]))
+        && d.total == sub(it[0])
+             + (it.size() > 1 ? sub(it[1]) : 0)
+             + (it.size() > 2 ? sub(it[2]) : 0)
+             + (it.size() > 3 ? sub(it[3]) : 0)
+             + (it.size() > 4 ? sub(it[4]) : 0)
+        && d.qty == it[0].qty
+             + (it.size() > 1 ? it[1].qty : 0)
+             + (it.size() > 2 ? it[2].qty : 0)
+             + (it.size() > 3 ? it[3].qty : 0)
+             + (it.size() > 4 ? it[4].qty : 0);
     }
 
     // المنتجات: قراءة للجميع، وتعديل للأدمن فقط
@@ -15,7 +44,7 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // تكلفة المنتجات: للأدمن فقط (لا يراها المستخدمون)
+    // تكلفة المنتجات وفئاتها: للأدمن فقط (لا يراها المستخدمون)
     match /costs/{pid} {
       allow read, write: if isAdmin();
     }
@@ -25,19 +54,12 @@ service cloud.firestore {
       allow get: if true;
       allow list: if isAdmin();
 
-      // الأدمن ينشئ أي طلب، والمستخدم ينشئ طلباً بحالة "في انتظار الموافقة" وسعر المنتج الحقيقي فقط
+      // الأدمن ينشئ أي طلب، والمستخدم ينشئ طلباً بحالة "في انتظار الموافقة" وبأسعار المنتجات الحقيقية فقط
       allow create: if isAdmin() || (
         request.resource.data.keys().hasOnly(
-          ['id','name','phone','qty','total','unitPrice','productId','productName','teacher','note','status','adminNote','adminNotes','history','createdAt','updatedAt'])
+          ['id','name','phone','qty','total','items','teacher','note','status','adminNote','adminNotes','history','createdAt','updatedAt'])
         && request.resource.data.status == 'pending'
-        && request.resource.data.qty is int
-        && request.resource.data.qty >= 1 && request.resource.data.qty <= 100
-        && request.resource.data.productId is string
-        && exists(/databases/$(database)/documents/products/$(request.resource.data.productId))
-        && get(/databases/$(database)/documents/products/$(request.resource.data.productId)).data.active == true
-        && request.resource.data.unitPrice == get(/databases/$(database)/documents/products/$(request.resource.data.productId)).data.price
-        && request.resource.data.productName == get(/databases/$(database)/documents/products/$(request.resource.data.productId)).data.name
-        && request.resource.data.total == request.resource.data.qty * request.resource.data.unitPrice
+        && validItems(request.resource.data)
         && request.resource.data.history.size() == 0
         && request.resource.data.adminNote == ''
         && request.resource.data.adminNotes.size() == 1

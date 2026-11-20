@@ -24,23 +24,35 @@ export default async function handler(req, res) {
 
     const body = req.body || {};
 
-    // ===== إنشاء طلب =====
+    // ===== إنشاء طلب (حتى 5 منتجات مختلفة) =====
     if (req.method === 'POST') {
       const name = clean(body.name, 60);
       const phone = clean(body.phone, 20).replace(/[^\d+]/g, '');
-      const qty = parseInt(body.qty, 10);
-      const productId = clean(body.productId, 60);
       if (name.length < 2) return res.status(400).json({ error: 'الاسم مطلوب' });
       if (phone.length < 10 || phone.length > 15) return res.status(400).json({ error: 'رقم هاتف التحويل غير صحيح' });
-      if (!Number.isInteger(qty) || qty < 1 || qty > 100) return res.status(400).json({ error: 'الكمية يجب أن تكون بين 1 و 100' });
 
-      if (!productId) return res.status(400).json({ error: 'اختر نوع المنتج' });
-      const pSnap = await getDoc(doc(db, 'products', productId));
-      if (!pSnap.exists() || pSnap.data().active === false)
-        return res.status(400).json({ error: 'هذا المنتج غير متاح حالياً' });
-      const product = pSnap.data();
-      const unitPrice = Number(product.price);
-      const total = qty * unitPrice;
+      const raw = Array.isArray(body.items) ? body.items : (body.productId ? [{ productId: body.productId, qty: body.qty }] : []);
+      const merged = new Map();
+      for (const it of raw) {
+        const pid = clean(it && it.productId, 60);
+        const q = parseInt(it && it.qty, 10);
+        if (!pid) continue;
+        if (!Number.isInteger(q) || q < 1 || q > 100) return res.status(400).json({ error: 'الكمية يجب أن تكون بين 1 و 100' });
+        merged.set(pid, Math.min(100, (merged.get(pid) || 0) + q));
+      }
+      if (!merged.size) return res.status(400).json({ error: 'اختر منتجاً واحداً على الأقل' });
+      if (merged.size > 5) return res.status(400).json({ error: 'الحد الأقصى 5 منتجات مختلفة في الطلب الواحد' });
+
+      const items = [];
+      for (const [pid, q] of merged) {
+        const pSnap = await getDoc(doc(db, 'products', pid));
+        if (!pSnap.exists() || pSnap.data().active === false)
+          return res.status(400).json({ error: 'أحد المنتجات غير متاح حالياً' });
+        const p = pSnap.data();
+        items.push({ productId: pid, productName: p.name, unitPrice: Number(p.price), qty: q });
+      }
+      const qty = items.reduce((s, i) => s + i.qty, 0);
+      const total = items.reduce((s, i) => s + i.unitPrice * i.qty, 0);
 
       let id = null;
       for (let i = 0; i < 6; i++) {
@@ -52,9 +64,7 @@ export default async function handler(req, res) {
 
       const now = Date.now();
       const order = {
-        id, name, phone, qty,
-        productId, productName: product.name, unitPrice,
-        total,
+        id, name, phone, qty, total, items,
         teacher: clean(body.teacher, 60),
         note: clean(body.note, 500),
         status: 'pending',
