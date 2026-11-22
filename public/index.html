@@ -94,13 +94,18 @@ textarea{resize:vertical;min-height:80px}
 .mine-item .l{display:flex;flex-direction:column;gap:2px}
 .mine-item .id{color:var(--mint);font-weight:800;direction:ltr;text-align:right}
 .mine-item .sub{color:var(--muted);font-size:.82rem}
-.prods{display:flex;flex-direction:column;gap:8px}
-.prod{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1.5px solid var(--line);background:var(--card2);border-radius:12px;padding:10px 12px;transition:.2s}
+.prods{display:flex;flex-direction:column;gap:10px}
+.prod{border:1.5px solid var(--line);background:var(--card2);border-radius:14px;padding:12px 14px;transition:.2s}
 .prod.sel{border-color:var(--mint);background:var(--mint-soft)}
-.prod .pi b{display:block}.prod .pi span{color:var(--mint);font-weight:800;font-size:.92rem}
-.stp{display:flex;align-items:center;gap:8px}
-.stp button{width:38px;height:38px;border-radius:10px;border:1.5px solid var(--line);background:var(--card);color:var(--mint);font-size:1.2rem;cursor:pointer;font-family:inherit}
-.stp .q{min-width:26px;text-align:center;font-weight:800;font-size:1.05rem}
+.pick{display:flex;align-items:center;gap:12px;cursor:pointer;margin:0}
+.pick input{width:22px;height:22px;accent-color:var(--mint);flex:none;padding:0;cursor:pointer}
+.pick .pi b{display:block;font-size:1.02rem}
+.pick .pi span{color:var(--mint);font-weight:800;font-size:.92rem}
+.pq{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+.pq .lbl{color:var(--muted);font-size:.9rem}
+.pq button{width:38px;height:38px;border-radius:10px;border:1.5px solid var(--line);background:var(--card);color:var(--mint);font-size:1.2rem;cursor:pointer;font-family:inherit}
+.pq input{width:70px;text-align:center;font-weight:800;padding:8px}
+.pq .sub{margin-inline-start:auto;color:var(--mint);font-weight:800}
 .empty{color:var(--muted);text-align:center;padding:18px}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--mint);color:#000;font-weight:800;
   padding:12px 22px;border-radius:99px;transition:.3s;z-index:9;max-width:90%;text-align:center}
@@ -181,7 +186,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:30px}
 <div class="toast" id="toast"></div>
 
 <script>
-let products = [], cart = {};
+let products = [], cart = {}, prodErr = false;
 const LS = 'trz_orders_v1';
 const STATUS = { pending:'في انتظار الموافقة', approved:'تمت الموافقة، في انتظار التسليم', rejected:'مرفوض', delivered:'تم التسليم' };
 const $ = id => document.getElementById(id);
@@ -222,24 +227,37 @@ function calc(){
   const t = products.reduce((s,p)=>s+(cart[p.id]||0)*p.price,0);
   $('tot').textContent = Object.keys(cart).length ? t.toLocaleString('en')+' جـ' : '—';
 }
-function chQtyOf(id,d){
-  const cur = cart[id]||0, n = Math.min(100, Math.max(0, cur+d));
-  if(cur===0 && d>0 && Object.keys(cart).length>=5){ toast('الحد الأقصى 5 منتجات مختلفة في الطلب'); return; }
-  if(n===0) delete cart[id]; else cart[id]=n;
+function togProd(id,on){
+  if(on){
+    if(Object.keys(cart).length>=5){ toast('الحد الأقصى 5 منتجات مختلفة في الطلب'); renderProds(); return; }
+    cart[id]=1;
+  } else delete cart[id];
   renderProds();
 }
+function setQty(id,v){
+  let n = parseInt(v); if(!(n>=1)) n=1; if(n>100) n=100;
+  cart[id]=n; renderProds();
+}
+function chQtyOf(id,d){ setQty(id,(cart[id]||1)+d); }
 function renderProds(){
   const box = $('prodList');
-  if(!products.length){ box.innerHTML = '<div class="empty" style="padding:8px">لا توجد منتجات متاحة حالياً</div>'; calc(); return; }
+  if(!products.length){ box.innerHTML = '<div class="empty" style="padding:8px">'+(prodErr?'تعذر تحميل المنتجات، أعد تحميل الصفحة':'لا توجد منتجات متاحة حالياً')+'</div>'; calc(); return; }
   box.innerHTML = products.map(p=>{
     const q = cart[p.id]||0, id = esc(p.id);
-    return `<div class="prod ${q?'sel':''}"><div class="pi"><b>${esc(p.name)}</b><span>${p.price} جـ</span></div>
-      <div class="stp"><button type="button" onclick="chQtyOf('${id}',1)">+</button><span class="q">${q}</span><button type="button" onclick="chQtyOf('${id}',-1)">−</button></div></div>`;
+    return `<div class="prod ${q?'sel':''}">
+      <label class="pick"><input type="checkbox" ${q?'checked':''} onchange="togProd('${id}',this.checked)">
+        <span class="pi"><b>${esc(p.name)}</b><span>${p.price} جـ للقطعة</span></span></label>
+      ${q?`<div class="pq"><span class="lbl">الكمية:</span>
+        <button type="button" onclick="chQtyOf('${id}',1)">+</button>
+        <input type="number" min="1" max="100" value="${q}" onchange="setQty('${id}',this.value)">
+        <button type="button" onclick="chQtyOf('${id}',-1)">−</button>
+        <span class="sub">${(q*p.price).toLocaleString('en')} جـ</span></div>`:''}
+    </div>`;
   }).join('');
   calc();
 }
 async function loadProducts(){
-  try{ products = await api('GET','/api/products'); }catch{ products = []; }
+  try{ products = await api('GET','/api/products'); prodErr = false; }catch{ products = []; prodErr = true; }
   for(const k of Object.keys(cart)) if(!products.some(p=>p.id===k)) delete cart[k];
   renderProds();
 }
